@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Workout Log</title>
+<meta name="theme-color" content="#0f1115">
+<meta name="color-scheme" content="dark light">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Workout Log">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="top">
+  <div class="datebar">
+    <button class="icon-btn" id="prevDate" aria-label="Previous day">‹</button>
+    <label class="datepick">
+      <span id="dateLabel">Today</span>
+      <input type="date" id="dateInput" aria-label="Pick date">
+    </label>
+    <button class="icon-btn" id="nextDate" aria-label="Next day">›</button>
+  </div>
+  <div class="daytabs" id="dayTabs" role="tablist"></div>
+</header>
+<main id="view"></main>
+<nav id="tabs">
+  <button data-tab="log" class="on"><span>🏋️</span>Log</button>
+  <button data-tab="history"><span>📅</span>History</button>
+  <button data-tab="progress"><span>📈</span>Progress</button>
+  <button data-tab="more"><span>⚙️</span>More</button>
+</nav>
+<dialog id="dlg"></dialog>
+<div id="toast" role="status" aria-live="polite"></div>
+<script src="app.js"></script>
+</body>
+</html>
