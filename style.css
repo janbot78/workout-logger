@@ -49,6 +49,19 @@ h3{font-size:17px;margin:0}
 .btn.sm{min-height:40px;padding:0 12px;font-size:14px}
 
 .checkin .grid{display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center;margin-top:8px}
+.cirow{display:flex;align-items:center;gap:8px}
+.cirow input{flex:1;min-width:0}
+.bandslot{flex:none;min-width:0}
+.band{display:inline-block;font-size:12px;font-weight:700;padding:3px 9px;border-radius:999px;border:1.5px solid var(--line);background:var(--card2);white-space:nowrap}
+.band.b0{color:var(--bad);border-color:var(--bad)}
+.band.b1{color:var(--warn);border-color:var(--warn)}
+.band.b2{color:var(--text);border-color:var(--mute)}
+.band.b3{color:var(--ok);border-color:var(--ok)}
+.band.b4{color:var(--ok);border-color:var(--ok);background:color-mix(in srgb,var(--ok) 18%,var(--card2))}
+.band.of4.b0{color:var(--bad);border-color:var(--bad)}.band.of4.b1{color:var(--warn);border-color:var(--warn)}.band.of4.b2{color:var(--ok);border-color:var(--ok)}.band.of4.b3{color:var(--ok);border-color:var(--ok);background:color-mix(in srgb,var(--ok) 18%,var(--card2))}
+.cihint{margin-top:2px;font-size:12px}
+.cierr{color:var(--bad);min-height:0;font-size:12px}
+input.bad{border-color:var(--bad)}
 .energy{display:flex;gap:6px}
 .energy button{flex:1;min-height:48px;border-radius:12px;border:1.5px solid var(--line);background:var(--card2);font-weight:700;font-size:18px}
 .energy button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-t)}

@@ -1,5 +1,5 @@
 // Simple offline cache: serve from cache, refresh in background (stale-while-revalidate).
-const CACHE = 'workout-log-v1';
+const CACHE = 'workout-log-v2';
 const ASSETS = ['./', 'index.html', 'style.css', 'app.js', 'manifest.webmanifest',
   'icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'apple-touch-icon.png'];
 

@@ -170,12 +170,60 @@ function renderHeader() {
 }
 
 /* ---------- log view ---------- */
+/* Garmin-style daily check-in. Stored per date in state.checkins[date]:
+   sleepScore, battery, readiness (0-100), sleep (hrs), rhr (bpm), hrv (ms), notes, and legacy energy (1-5, kept for old entries). */
+const bandOf = (n, cuts, names) => { for (let i = 0; i < cuts.length; i++) if (n <= cuts[i]) return i; return names.length - 1; };
+const CI_FIELDS = [
+  { k: 'sleepScore', label: 'Sleep score', min: 0, max: 100, int: true, mode: 'numeric', ph: '0–100', hint: 'Garmin: last night’s sleep score',
+    names: ['Poor', 'Fair', 'Good', 'Excellent'], cuts: [59, 79, 89] },
+  { k: 'battery', label: 'Body Battery', min: 0, max: 100, int: true, mode: 'numeric', ph: '0–100', hint: 'Garmin: value when you woke up',
+    names: ['Low', 'Medium', 'High', 'Very high'], cuts: [25, 50, 75] },
+  { k: 'readiness', label: 'Training Readiness', min: 0, max: 100, int: true, mode: 'numeric', ph: '0–100', hint: 'Garmin: morning score',
+    names: ['Poor', 'Low', 'Moderate', 'High', 'Prime'], cuts: [25, 50, 75, 95] },
+  { k: 'sleep', label: 'Sleep (hrs)', min: 0, max: 24, int: false, mode: 'decimal', ph: 'optional, e.g. 7.5', opt: true },
+  { k: 'rhr', label: 'Resting HR', min: 20, max: 220, int: true, mode: 'numeric', ph: 'optional, bpm', opt: true },
+  { k: 'hrv', label: 'HRV (ms)', min: 1, max: 300, int: true, mode: 'numeric', ph: 'optional, overnight avg ms', opt: true },
+];
+const CI_BY_KEY = Object.fromEntries(CI_FIELDS.map(f => [f.k, f]));
+const bandInfo = (k, v) => { const f = CI_BY_KEY[k]; const n = num(v); if (!f || !f.names || n == null) return null; const i = bandOf(n, f.cuts, f.names); return { name: f.names[i], i, n: f.names.length }; };
+const bandHtml = (k, v) => { const b = bandInfo(k, v); return b ? `<span class="band b${b.i} of${b.n}">${b.name}</span>` : ''; };
+function parseCi(f, raw) { // -> {ok, v} ; empty is valid (null)
+  const t = String(raw).trim().replace(',', '.');
+  if (t === '') return { ok: true, v: null };
+  if (!/^\d+(\.\d+)?$/.test(t) || (f.int && t.includes('.'))) return { ok: false, msg: f.int ? 'Whole number only' : 'Numbers only' };
+  const n = Number(t);
+  if (n < f.min || n > f.max) return { ok: false, msg: `Enter ${f.min}–${f.max}` };
+  return { ok: true, v: n };
+}
+const hasCheckin = c => !!c && (CI_FIELDS.some(f => c[f.k] != null && c[f.k] !== '') || c.energy || c.notes);
 function checkinHtml() {
   const c = state.checkins[view.date] || {};
-  return `<div class="card checkin"><h3>Daily check-in</h3>
-  <div class="grid"><span class="mute">Sleep (hrs)</span><input id="ci-sleep" inputmode="decimal" placeholder="e.g. 7.5" value="${esc(c.sleep ?? '')}"></div>
-  <div class="grid"><span class="mute">Energy / recovery</span><div class="energy" id="ci-energy">${[1, 2, 3, 4, 5].map(n => `<button data-n="${n}" class="${c.energy === n ? 'on' : ''}">${n}</button>`).join('')}</div></div>
-  <div class="grid"><span class="mute">Notes</span><input id="ci-notes" placeholder="Soreness, stress, mood…" value="${esc(c.notes || '')}"></div></div>`;
+  const row = f => `<div class="grid"><label class="mute" for="ci-${f.k}">${f.label}${f.opt ? '' : ''}</label>
+    <div><div class="cirow"><input id="ci-${f.k}" data-ci="${f.k}" type="text" inputmode="${f.mode}" autocomplete="off" enterkeyhint="done" placeholder="${f.ph}" value="${esc(c[f.k] ?? '')}"><span class="bandslot" id="band-${f.k}">${bandHtml(f.k, c[f.k])}</span></div>
+    ${f.hint ? `<div class="small mute cihint">${f.hint}</div>` : ''}<div class="small cierr" id="err-${f.k}"></div></div></div>`;
+  const legacy = c.energy ? `<div class="grid"><span class="mute">Energy (old 1–5)</span><div class="energy" id="ci-energy">${[1, 2, 3, 4, 5].map(n => `<button data-n="${n}" class="${c.energy === n ? 'on' : ''}">${n}</button>`).join('')}</div></div>` : '';
+  return `<div class="card checkin"><h3>Daily check-in <span class="mute small">· from Garmin</span></h3>
+  ${CI_FIELDS.map(row).join('')}${legacy}
+  <div class="grid"><label class="mute" for="ci-notes">Notes</label><input id="ci-notes" placeholder="Soreness, stress, mood…" value="${esc(c.notes || '')}"></div></div>`;
+}
+const bandTxt = (k, v) => { const b = bandInfo(k, v); return b ? ` (${b.name})` : ''; };
+function ciParts(c, long) { // compact list of metrics for history / summary
+  const o = [];
+  const S = (k, short, long_, unit) => { if (c[k] != null && c[k] !== '') o.push(long ? `${long_} ${c[k]}${unit || ''}${bandTxt(k, c[k])}` : `${short} ${c[k]}${unit || ''}`); };
+  S('sleepScore', '😴', 'sleep score'); S('battery', '🔋', 'Body Battery'); S('readiness', '🎯', 'Training Readiness');
+  if (c.sleep != null && c.sleep !== '') o.push(long ? `sleep ${c.sleep}h` : `🛏 ${c.sleep}h`);
+  S('rhr', '❤️', 'resting HR', ' bpm'); S('hrv', 'HRV', 'HRV', ' ms');
+  if (c.energy) o.push(long ? `energy/recovery ${c.energy}/5 (old rating)` : `⚡ ${c.energy}/5`);
+  return o;
+}
+function ciAverages(dates) { // [{label, avg, n, unit}]
+  const defs = [['sleepScore', 'Sleep score', ''], ['battery', 'Body Battery', ''], ['readiness', 'Training Readiness', ''], ['sleep', 'Sleep hours', 'h'], ['rhr', 'Resting HR', ' bpm'], ['hrv', 'HRV', ' ms'], ['energy', 'Energy (old 1-5 rating)', '/5']];
+  const out = [];
+  for (const [k, label, unit] of defs) {
+    const v = dates.map(d => state.checkins[d]).filter(Boolean).map(c => num(c[k])).filter(x => x != null && x > 0);
+    if (v.length) out.push({ k, label, unit, n: v.length, avg: v.reduce((a, b) => a + b, 0) / v.length });
+  }
+  return out;
 }
 function hintHtml(ex) {
   if (ex.kind === 'text') return '';
@@ -279,14 +327,14 @@ function sessionLines(s) {
 function renderHistory() {
   const dates = new Set();
   for (const s of Object.values(state.sessions)) if (hasData(s)) dates.add(s.date);
-  for (const [d, c] of Object.entries(state.checkins)) if (c && (c.sleep || c.energy || c.notes)) dates.add(d);
+  for (const [d, c] of Object.entries(state.checkins)) if (hasCheckin(c)) dates.add(d);
   const list = [...dates].sort().reverse();
   if (!list.length) { $('#view').innerHTML = '<h2>History</h2><div class="empty">No workouts logged yet.<br>Log a set and it will show up here.</div>'; return; }
   let h = '<h2>History</h2>';
   for (const d of list) {
     const sess = Object.values(state.sessions).filter(s => s.date === d && hasData(s));
     const c = state.checkins[d];
-    const ci = c ? [c.sleep && `😴 ${c.sleep}h`, c.energy && `⚡ ${c.energy}/5`, c.notes].filter(Boolean).join(' · ') : '';
+    const ci = c ? [...ciParts(c, false), c.notes].filter(Boolean).join(' · ') : '';
     h += `<div class="card hist-item"><div class="top"><div><h3>${fmtDate(d)}</h3>${ci ? `<div class="small mute">${esc(ci)}</div>` : ''}</div></div>`;
     for (const s of sess) {
       const di = dayInfo(s.day);
@@ -317,11 +365,12 @@ function series(name) {
   }
   return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
 }
-function chartSvg(pts, label) {
+function chartSvg(pts, label, clamp) {
   const W = 340, H = 190, L = 38, R = 12, T = 14, B = 26;
   const vals = pts.map(p => p.v); let lo = Math.min(...vals), hi = Math.max(...vals);
   if (lo === hi) { lo -= 1; hi += 1; }
   const padv = (hi - lo) * 0.15; lo -= padv; hi += padv;
+  if (clamp) { lo = Math.max(lo, clamp[0]); hi = Math.min(hi, clamp[1]); }
   const x = i => pts.length === 1 ? (L + W - R) / 2 : L + (W - L - R) * i / (pts.length - 1);
   const y = v => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
   let g = '';
@@ -332,9 +381,25 @@ function chartSvg(pts, label) {
     (pts.length > 1 ? `<text x="${x(pts.length - 1)}" y="${H - 8}" text-anchor="end">${fmtShort(pts[pts.length - 1].date)}</text>` : '');
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)} over time">${g}${line}${dots}${xl}</svg>`;
 }
+function recoveryCard() {
+  const dates = Object.keys(state.checkins).sort();
+  const metrics = CI_FIELDS.map(f => ({ k: f.k, label: f.label.replace(' (hrs)', ' hours').replace(' (ms)', '') })).concat([{ k: 'energy', label: 'Energy (old 1–5)' }]);
+  const has = k => dates.some(d => num((state.checkins[d] || {})[k]) != null);
+  const avail = metrics.filter(m => has(m.k));
+  if (!avail.length) return '';
+  if (!avail.some(m => m.k === view.recMetric)) view.recMetric = avail[0].k;
+  const pts = dates.map(d => ({ date: d, v: num((state.checkins[d] || {})[view.recMetric]) })).filter(p => p.v != null).slice(-30);
+  const lab = avail.find(m => m.k === view.recMetric).label;
+  const vals = pts.map(p => p.v), avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+  const f = (v) => fmtNum(v);
+  let h = `<div class="card"><h3 style="margin-bottom:8px">Recovery trends</h3><select id="recSel">${avail.map(m => `<option value="${m.k}" ${m.k === view.recMetric ? 'selected' : ''}>${esc(m.label)}</option>`).join('')}</select>
+  <div class="stats"><div class="stat"><b>${f(avg)}</b><span>Average</span></div><div class="stat"><b>${f(vals[vals.length - 1])}</b><span>Latest</span></div><div class="stat"><b>${f(Math.min(...vals))}–${f(Math.max(...vals))}</b><span>Range</span></div></div>
+  <div class="small mute" style="margin-bottom:4px">${esc(lab)} by day (last ${pts.length} entr${pts.length === 1 ? 'y' : 'ies'})${bandInfo(view.recMetric, avg) ? ` · average is ${bandInfo(view.recMetric, avg).name}` : ''}</div>${chartSvg(pts, lab, CI_BY_KEY[view.recMetric] && CI_BY_KEY[view.recMetric].max === 100 ? [0, 100] : view.recMetric === 'energy' ? [1, 5] : [0, 1e9])}</div>`;
+  return h;
+}
 function renderProgress() {
-  const names = exerciseNames();
-  if (!names.length) { $('#view').innerHTML = '<h2>Progress</h2><div class="empty">Check off some sets and your top-set progress will chart here.</div>'; return; }
+  const names = exerciseNames(); const rec = recoveryCard();
+  if (!names.length) { $('#view').innerHTML = '<h2>Progress</h2>' + rec + (rec ? '' : '<div class="empty">Check off some sets and your top-set progress will chart here.</div>'); return; }
   if (!view.progEx || !names.some(n => norm(n.name) === norm(view.progEx))) {
     const todays = getSess().ex.find(e => names.some(n => norm(n.name) === norm(e.name)));
     view.progEx = todays ? todays.name : names[0].name;
@@ -350,7 +415,7 @@ function renderProgress() {
     h += `<div class="small mute" style="margin-bottom:4px">${useW ? 'Top-set weight' : 'Best reps in a set'} per session (${unit})</div>${chartSvg(pts, view.progEx)}`;
     h += `<table class="ptable"><tr><th>Date</th><th>${useW ? 'Top set' : 'Best reps'}</th></tr>${[...pts].reverse().slice(0, 15).map(p => `<tr><td>${fmtDate(p.date)}</td><td>${fmtNum(p.v)}${useW ? ` ${unit} × ${p.r || '?'}` : ''}</td></tr>`).join('')}</table>`;
   }
-  h += '</div>';
+  h += '</div>' + rec;
   $('#view').innerHTML = h;
 }
 
@@ -380,10 +445,10 @@ function weekSummary(mon) {
   const sun = addDays(mon, 6);
   const lines = [`WEEKLY WORKOUT SUMMARY — ${fmtShort(mon)} to ${fmtShort(sun)}, ${parseYmd(sun).getFullYear()} (units: ${U()})`];
   const sessions = Object.values(state.sessions).filter(s => s.date >= mon && s.date <= sun && hasData(s)).sort((a, b) => a.date.localeCompare(b.date) || a.day.localeCompare(b.day));
-  let totalSets = 0; const flags = []; const checks = [];
+  let totalSets = 0; const flags = []; const checks = []; const ciDates = [];
   for (let i = 0; i < 7; i++) {
     const d = addDays(mon, i); const ss = sessions.filter(s => s.date === d); const c = state.checkins[d];
-    if (c && (c.sleep || c.energy || c.notes)) checks.push(`${DOW[parseYmd(d).getDay()]}: ${[c.sleep && `sleep ${c.sleep}h`, c.energy && `energy/recovery ${c.energy}/5`, c.notes && `"${c.notes}"`].filter(Boolean).join(', ')}`);
+    if (hasCheckin(c)) { checks.push(`${DOW[parseYmd(d).getDay()]}: ${[...ciParts(c, true), c.notes && `"${c.notes}"`].filter(Boolean).join(', ')}`); ciDates.push(d); }
     for (const s of ss) {
       const di = dayInfo(s.day);
       lines.push('', `${DOW[parseYmd(d).getDay()]} ${fmtShort(d)} — D${s.day.slice(1)} ${di.title}`);
@@ -402,7 +467,12 @@ function weekSummary(mon) {
   }
   const missed = []; for (let i = 0; i < 5; i++) { const d = addDays(mon, i); if (d <= todayStr() && !sessions.some(s => s.date === d)) missed.push(DOW[parseYmd(d).getDay()]); }
   lines.push('', `TOTALS: ${sessions.length} session(s), ${totalSets} sets completed${missed.length ? `; no session logged: ${missed.join(', ')}` : ''}`);
-  if (checks.length) { lines.push('', 'CHECK-INS:'); checks.forEach(c => lines.push('  ' + c)); }
+  if (checks.length) {
+    lines.push('', 'CHECK-INS (Garmin: sleep score / Body Battery at wake / Training Readiness):'); checks.forEach(c => lines.push('  ' + c));
+    const av = ciAverages(ciDates);
+    if (av.length) { lines.push('', `WEEKLY GARMIN AVERAGES (over days logged, ${ciDates.length} check-in day${ciDates.length === 1 ? '' : 's'}):`);
+      av.forEach(a => { const r = a.k === 'sleep' || a.k === 'energy' ? Math.round(a.avg * 10) / 10 : Math.round(a.avg); lines.push(`  • ${a.label}: ${r}${a.unit}${bandTxt(a.k, a.avg)} (${a.n} day${a.n === 1 ? '' : 's'})`); }); }
+  }
   if (flags.length) { lines.push('', 'PROGRESSION FLAGS:'); flags.forEach(f => lines.push('  • ' + f)); }
   if (!sessions.length) lines.push('', '(Nothing logged this week yet.)');
   return lines.join('\n');
@@ -511,11 +581,15 @@ $('#dayTabs').addEventListener('click', e => { const b = e.target.closest('butto
 const view$ = $('#view');
 view$.addEventListener('input', e => {
   const t = e.target;
-  if (t.id === 'ci-sleep' || t.id === 'ci-notes') {
+  if (t.dataset.ci) {
+    const f = CI_BY_KEY[t.dataset.ci]; const r = parseCi(f, t.value); const err = $('#err-' + f.k);
+    t.classList.toggle('bad', !r.ok); if (err) err.textContent = r.ok ? '' : r.msg;
+    if (!r.ok) { const slot = $('#band-' + f.k); if (slot) slot.innerHTML = ''; return; } // invalid: don't store
     const c = state.checkins[view.date] = state.checkins[view.date] || {};
-    if (t.id === 'ci-sleep') c.sleep = t.value.trim(); else c.notes = t.value; save(); return;
+    c[f.k] = r.v; save(); const slot = $('#band-' + f.k); if (slot) slot.innerHTML = bandHtml(f.k, r.v); return;
   }
-  if (t.id === 'progSel') return;
+  if (t.id === 'ci-notes') { const c = state.checkins[view.date] = state.checkins[view.date] || {}; c.notes = t.value; save(); return; }
+  if (t.id === 'progSel' || t.id === 'recSel') return;
   const row = t.closest('.set[data-e]');
   if (row && t.dataset.f) {
     const ex = getSess().ex.find(x => x.id === row.dataset.e); const s = ex.data[+row.dataset.i];
@@ -535,7 +609,13 @@ view$.addEventListener('change', e => {
     if (!s.done && s.w != null && s.r != null) { s.done = true; touch(); }
     refreshCard(ex.id);
   } else if (row) refreshCard(row.dataset.e);
-  if (t.id === 'ci-sleep' || t.id === 'ci-notes') renderHeader();
+  if (t.dataset.ci) { // on blur: revert an invalid entry to the last saved value
+    const f = CI_BY_KEY[t.dataset.ci]; const c = state.checkins[view.date] || {};
+    if (!parseCi(f, t.value).ok) { t.value = c[f.k] ?? ''; t.classList.remove('bad'); $('#err-' + f.k).textContent = ''; $('#band-' + f.k).innerHTML = bandHtml(f.k, c[f.k]); toast(`${f.label}: ${f.min}–${f.max} only`); }
+    return;
+  }
+  if (t.id === 'recSel') { view.recMetric = t.value; renderProgress(); return; }
+  if (t.id === 'ci-notes') renderHeader();
 });
 view$.addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
