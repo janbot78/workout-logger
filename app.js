@@ -68,6 +68,21 @@ const DEFAULT_PLAN = {
   ],
 };
 
+/* ---------- form tips (data-driven, matched by exercise name so saved plans/sessions get them too) ---------- */
+const FORM_TIPS = {
+  'bulgarian split squat': {
+    'Setup': ['Rear foot elevated on bench, rear leg straight.', "Front leg bent \u2014 that's your start position.", 'Hold dumbbells next to your shins for balance.'],
+    'Execution': ['Sit down into the rep under control.', 'Aim for ~90\u00b0 at the front knee.', 'Lean torso slightly forward to load the glutes.'],
+    'Common mistakes': ['Front knee drifting past the toes.', 'Dumbbells held behind you or too far back.', 'Dropping into the rep instead of sitting down into it.'],
+  },
+};
+// ex.formTips (custom, optional) overrides; otherwise looked up by name, so swapping to an alt shows only that alt's tips.
+const tipsFor = ex => ex.formTips || FORM_TIPS[String(ex.name || '').trim().toLowerCase()] || null;
+function tipsHtml(ex) {
+  const t = tipsFor(ex); if (!t) return '';
+  return `<details class="formtips"><summary>\u24d8 Form tips</summary>${Object.entries(t).map(([h, l]) => `<div class="ft-h">${esc(h)}</div><ul>${l.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`).join('')}</details>`;
+}
+
 /* ---------- state ---------- */
 function defaults() { return { v: 1, units: 'lb', theme: 'auto', plan: clone(DEFAULT_PLAN), sessions: {}, checkins: {}, lastExport: null }; }
 function load() {
@@ -277,7 +292,7 @@ function cardHtml(ex) {
   }
   return `<section class="card ex ${isComplete(ex) ? 'complete' : ''}" id="ex-${ex.id}">
     <div class="ex-head"><div><h3>${esc(ex.name)}</h3><div class="meta">${meta}</div></div>
-    <div class="row"><span class="count" data-r="count">${countText(ex)}</span><button class="btn sm" data-act="edit" data-e="${ex.id}" aria-label="Edit exercise">⋯</button></div></div>${body}</section>`;
+    <div class="row"><span class="count" data-r="count">${countText(ex)}</span><button class="btn sm" data-act="edit" data-e="${ex.id}" aria-label="Edit exercise">⋯</button></div></div>${tipsHtml(ex)}${body}</section>`;
 }
 const isComplete = ex => ex.kind === 'text' ? !!ex.done : (doneSets(ex).length >= ex.sets && ex.sets > 0);
 const countText = ex => ex.kind === 'text' ? (ex.done ? '✓' : '') : `${doneSets(ex).length}/${ex.sets}`;

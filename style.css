@@ -129,3 +129,9 @@ pre.summary,textarea.summary{width:100%;min-height:260px;font:13px/1.45 ui-monos
 #toast{position:fixed;left:50%;bottom:calc(86px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:24px;font-size:14px;opacity:0;pointer-events:none;transition:.25s;z-index:50;max-width:90vw;text-align:center}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .empty{text-align:center;color:var(--mute);padding:30px 10px}
+.formtips{margin:8px 0 4px;border:1px solid var(--line,rgba(127,127,127,.3));border-radius:10px;padding:6px 10px;font-size:14px}
+.formtips summary{cursor:pointer;font-weight:600;min-height:32px;display:flex;align-items:center;list-style:none}
+.formtips summary::-webkit-details-marker{display:none}
+.formtips[open] summary{margin-bottom:4px}
+.formtips .ft-h{font-weight:600;margin-top:6px;color:var(--mute)}
+.formtips ul{margin:2px 0 4px;padding-left:20px}
