@@ -83,6 +83,44 @@ function tipsHtml(ex) {
   return `<details class="formtips"><summary>\u24d8 Form tips</summary>${Object.entries(t).map(([h, l]) => `<div class="ft-h">${esc(h)}</div><ul>${l.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`).join('')}</details>`;
 }
 
+/* ---------- next-session targets (baked after week of Oct 19–25 2026; matched by name like form tips) ---------- */
+const NEXT_TARGETS = {
+  'back squat': { w: 90 },
+  'romanian deadlift': { w: 70 },
+  'bulgarian split squat': { w: 25 },
+  'leg curl': { w: 45, label: '40–45' },
+  'bench press': { w: 60 },
+  'lat pulldown': { w: 55 },
+  'overhead press': { tip: 'stay 40–45 or finish with push press' },
+  'chest-supported row': { w: 20 },
+  'lateral raise': { w: 7.5, label: '7.5–10' },
+  'face pull': { w: 30 },
+  'deadlift': { w: 120 },
+  'trap bar deadlift': { w: 120 },
+  'front squat': { w: 70 },
+  'barbell bent-over row': { w: 55, label: '55–60' },
+  "farmer's carry": { tip: 'lighter or shorter; use chalk/straps' },
+  'clean & jerk': { w: 55, tip: '55–60 lb (not 65)' },
+  'incline db press': { w: 20 },
+  'db bench press': { w: 20 },
+  'single-arm db row': { w: 30 },
+};
+const nextFor = ex => NEXT_TARGETS[String(ex.name || '').trim().toLowerCase()] || null;
+function nextLabel(nt) {
+  if (!nt) return '';
+  if (nt.tip) return nt.tip;
+  if (nt.label) return nt.label + ' ' + U();
+  if (nt.w != null) return fmtNum(toDisp(nt.w)) + ' ' + U();
+  return '';
+}
+function nextHtml(ex) {
+  if (ex.kind === 'text') return '';
+  const nt = nextFor(ex); if (!nt) return '';
+  const lab = nextLabel(nt); if (!lab) return '';
+  return `<div class="nextchip" data-r="next">Next target: <b>${esc(lab)}</b></div>`;
+}
+
+
 /* ---------- state ---------- */
 function defaults() { return { v: 1, units: 'lb', theme: 'auto', plan: clone(DEFAULT_PLAN), sessions: {}, checkins: {}, lastExport: null }; }
 function load() {
@@ -249,18 +287,26 @@ function hintHtml(ex) {
 }
 function progHtml(ex) {
   if (ex.kind === 'text') return '';
+  const nt = nextFor(ex);
   const cur = progSuggestion(ex, ex.data, 'You');
-  if (cur) return `✅ ${esc(cur.text)}. Add weight next time → ${esc(cur.next)} ${U()}`;
+  if (cur) {
+    const nxt = (nt && nt.w != null) ? nextLabel(nt) : (cur.next + ' ' + U());
+    return `✅ ${esc(cur.text)}. Add weight next time → ${esc(nxt)}`;
+  }
   const last = lastFor(ex.name, curKey());
   if (last) {
     const p = progSuggestion(ex, last.sets, 'Last time you');
-    if (p) return `⬆️ ${esc(p.text)}. Try ${esc(p.next)} ${U()} today`;
+    if (p) {
+      const nxt = (nt && (nt.w != null || nt.label)) ? nextLabel(nt) : (p.next + ' ' + U());
+      return `⬆️ ${esc(p.text)}. Try ${esc(nxt)} today`;
+    }
   }
   return '';
 }
 function setRowHtml(ex, s, i, last) {
   const ls = last && (last.sets.filter(x => x.done)[i] || last.sets.filter(x => x.done).slice(-1)[0]);
-  const wph = ls && ls.w != null ? dispW(ls.w) : '';
+  const nt = nextFor(ex);
+  const wph = (nt && nt.w != null) ? dispW(nt.w) : (ls && ls.w != null ? dispW(ls.w) : '');
   const rph = ls && ls.r != null ? ls.r : (parseTop(ex.reps) || '');
   return `<div class="set ${s.done ? 'done' : ''}" data-e="${ex.id}" data-i="${i}">
     <span class="n">${i + 1}</span>
@@ -282,6 +328,7 @@ function cardHtml(ex) {
   } else {
     const last = lastFor(ex.name, curKey());
     body = `<div class="hint" data-r="hint">${hintHtml(ex)}</div>
+      ${nextHtml(ex)}
       <div class="sets"><div class="set hdr"><span>#</span><span>${U()}</span><span>Reps</span><span>RPE</span><span></span></div>
       ${ex.data.map((s, i) => setRowHtml(ex, s, i, last)).join('')}</div>
       <div class="prog" data-r="prog">${progHtml(ex)}</div>
